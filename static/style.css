@@ -7322,3 +7322,31 @@ html[data-conversation-outline="enabled"] #outlineToggleBtn:not([hidden]){displa
 /* Settings field highlight (mirrors msg-question-highlight / _highlightQuestionRow pattern) */
 .settings-field-highlight { animation: settings-field-pulse 1.6s ease-out; }
 @keyframes settings-field-pulse { 0% { box-shadow: 0 0 0 0 var(--focus-ring); } 35% { box-shadow: 0 0 0 4px var(--focus-ring); } 100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); } }
+
+/* ── Session tab bar (pinned conversations) ────────────────────────────────
+   In-page tabs above the transcript. Hidden when no sessions are pinned
+   (zero chrome cost for non-users). Horizontal scroll on narrow viewports so
+   the strip never wraps or clips the composer. Touch targets >=44px on phones. */
+.session-tab-bar{display:flex;gap:6px;align-items:center;padding:8px 12px 6px;overflow-x:auto;overflow-y:hidden;flex-shrink:0;border-bottom:1px solid var(--border);scrollbar-width:thin;}
+.session-tab-bar[hidden]{display:none;}
+.session-tab{display:flex;align-items:center;gap:6px;min-width:0;max-width:220px;padding:5px 6px 5px 10px;border:1px solid var(--border2);border-radius:999px;background:var(--code-bg);color:var(--muted);font-size:12px;flex-shrink:0;cursor:default;}
+.session-tab.active{color:var(--text);border-color:var(--accent-bg-strong);background:var(--accent-bg);}
+.session-tab-label{background:none;border:none;color:inherit;font:inherit;min-width:0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:2px 0;}
+.session-tab-label:hover{text-decoration:underline;}
+.session-tab-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);flex-shrink:0;order:-1;}
+.session-tab.streaming .session-tab-dot{background:var(--green,#3fb950);box-shadow:0 0 0 3px color-mix(in srgb,var(--green,#3fb950) 22%,transparent);}
+.session-tab.unread .session-tab-dot{background:var(--accent-text);}
+.session-tab.needs-attention .session-tab-dot{background:var(--warning,#d29922);}
+.session-tab.attention-approval .session-tab-dot{background:var(--error,#e05);}
+.session-tab.attention-clarify .session-tab-dot{background:var(--accent-text);}
+.session-tab-close{background:none;border:none;color:inherit;font-size:14px;line-height:1;padding:2px 6px;border-radius:50%;cursor:pointer;opacity:.6;flex-shrink:0;}
+.session-tab-close:hover{opacity:1;background:var(--hover-bg);}
+@media (max-width:640px){
+  .session-tab-bar{padding:6px 8px 4px;gap:4px;}
+  .session-tab{max-width:160px;font-size:12px;}
+  .session-tab-label{max-width:100px;min-height:44px;display:flex;align-items:center;}
+  .session-tab-close{min-width:44px;min-height:44px;font-size:16px;}
+}
+@media (prefers-reduced-motion:reduce){
+  .session-tab-label:hover{text-decoration:none;}
+}

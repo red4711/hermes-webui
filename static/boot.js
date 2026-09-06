@@ -3841,7 +3841,9 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
         _workspacePanelMode='browse';
       }
       S._bootReady=true;
-      syncTopbar();syncWorkspacePanelState();await renderSessionList();if(typeof startGatewaySSE==='function')startGatewaySSE();await checkInflightOnBoot(saved);await _finalizeComposerPrefillOnBoot(prefillIntent);return;}
+      syncTopbar();syncWorkspacePanelState();await renderSessionList();if(typeof startGatewaySSE==='function')startGatewaySSE();await checkInflightOnBoot(saved);await _finalizeComposerPrefillOnBoot(prefillIntent);
+      if(typeof _sessionTabsInit==='function'){ try{ _sessionTabsInit(); }catch(_){} }
+      return;}
     catch(e){localStorage.removeItem('hermes-webui-session');}
   }
   // no saved session - show empty state, wait for user to hit +
@@ -3856,6 +3858,9 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   syncWorkspacePanelState();
   $('emptyState').style.display='';
   await renderSessionList();await _finalizeComposerPrefillOnBoot(prefillIntent);
+  // Session tabs: restore pins + arm bounded background subscribers after the
+  // list cache is authoritative (prune needs _allSessions).
+  if(typeof _sessionTabsInit==='function'){ try{ _sessionTabsInit(); }catch(_){} }
   // Start real-time gateway session sync if setting is enabled
   if(typeof startGatewaySSE==='function') startGatewaySSE();
 })().catch(e=>{

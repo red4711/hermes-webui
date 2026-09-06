@@ -1193,6 +1193,9 @@ function _markSessionCompletedInList(session, previousSid = null) {
     message_count: messageCount,
     last_message_at: lastMessageAt,
   });
+  // Session tabs: refresh the pin snapshot + dot on settle.
+  if(typeof _sessionTabRememberSnapshot==='function'){ try{ _sessionTabRememberSnapshot(finalSid, _allSessions[idx]); }catch(_){ } }
+  if(typeof _sessionTabsRender==='function'){ try{ _sessionTabsRender(); }catch(_){ } }
   renderSessionListFromCache();
 }
 
@@ -1686,8 +1689,30 @@ async function _switchProfileForSessionLoad(profile){
   }
 }
 
+// Session-tab warm-snapshot projection (fast path for pinned-tab switches).
+function _warmTabMetaProjection(sid, warmMeta){
+  if(typeof _sessionSnapshotById!=='function') return null;
+  const row = _sessionSnapshotById(sid);
+  if(!row || row.pending_user_message || row.active_stream_id) return null;
+  const mc = Number(warmMeta.message_count);
+  const ua = Number(warmMeta.updated_at);
+  const projected = {...row};
+  if(Number.isFinite(mc)) projected.message_count = mc;
+  if(warmMeta.title) projected.title = warmMeta.title;
+  if(Number.isFinite(ua)) projected.updated_at = ua;
+  return projected;
+}
+
+// Fold the warm projection into opts (no-op unless the fast path applies).
+function _withTabProjection(sid, opts){
+  if((S.session && S.session.active_stream_id) || typeof _warmTabMetaProjection!=='function') return opts;
+  const tp = _warmTabMetaProjection(sid, opts.warmSessionMeta);
+  return tp ? Object.assign({}, opts, {_tabProjected: tp}) : opts;
+}
+
 async function loadSession(sid){
-  const opts = arguments[1] || {};
+  let opts = arguments[1] || {};
+  if(opts.warmSessionMeta && !opts._tabProjected) opts = _withTabProjection(sid, opts);
   // Resolve canonical lineage SID BEFORE both the direct and sidebar preload
   // notifications so extensions always see the canonical session id, not the
   // raw sidebar click id (which may differ after lineage folding).
@@ -1852,7 +1877,7 @@ async function loadSession(sid){
   // Guard against network/server failures to prevent a permanently stuck loading state.
   let data;
   try {
-    data = await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=0&resolve_model=0`);
+    data = opts._tabProjected ? {session: opts._tabProjected} : await api(`/api/session?session_id=${encodeURIComponent(sid)}&messages=0&resolve_model=0`);
   } catch(e) {
     const profileMismatch=_sessionProfileMismatchFromError(e);
     if(profileMismatch && profileMismatch.profile && !opts.skipProfileResolve){
@@ -2062,9 +2087,11 @@ async function loadSession(sid){
     Number(data.session.message_count || 0),
     Number(data.session.last_message_at || data.session.updated_at || 0)
   );
-  try{localStorage.setItem('hermes-webui-session',S.session.session_id);}catch(_){}
+  try{localStorage.setItem('hermes-webui-session',S.session.session_id);}catch(_){ }
   _setActiveSessionUrl(S.session.session_id);
   if(typeof startSessionStream==='function') startSessionStream(S.session.session_id);
+  // Session tabs: re-sort (active last) + re-arm background subscribers.
+  if(typeof _sessionTabsOnActiveSessionChanged==='function'){ try{ _sessionTabsOnActiveSessionChanged(S.session.session_id); }catch(_){ } }
 
 
   // _mergePendingSessionMessage is the global identity-aware helper shared by
@@ -4927,6 +4954,27 @@ function _openSessionActionMenu(session, anchorEl){
     ));
   }
   _appendSessionShareActions(menu, session);
+  // Session tabs: pin/unpin this conversation as an in-page tab. Tabs keep a
+  // warm snapshot + a bounded background SSE subscriber so switching back is
+  // instant and completions arrive while the session is in the background.
+  // Rare per-item action — lives in the overflow menu per UIUX rule 10.
+  if(typeof sessionTabToggle==='function'){
+    const _tabPinned = (typeof sessionTabsHas==='function') && sessionTabsHas(session.session_id);
+    menu.appendChild(_buildSessionAction(
+      _tabPinned?t('session_tabs_unpin'):t('session_tabs_pin'),
+      _tabPinned?t('session_tabs_unpin_desc'):t('session_tabs_pin_desc'),
+      ICONS.pin,
+      ()=>{
+        closeSessionActionMenu();
+        const ok=sessionTabToggle(session.session_id, session);
+        const isPinned=(typeof sessionTabsHas==='function')&&sessionTabsHas(session.session_id);
+        if(typeof showToast==='function'){
+          showToast(t(!ok&&!isPinned?'session_tabs_full':(isPinned?'session_tabs_pinned':'session_tabs_unpinned')),!ok&&!isPinned?3000:1800);
+        }
+      },
+      _tabPinned?'is-active':''
+    ));
+  }
   menu.appendChild(_buildSessionAction(
     session.pinned?t('session_unpin'):t('session_pin'),
     session.pinned?t('session_unpin_desc'):t('session_pin_desc'),
@@ -5533,6 +5581,9 @@ function _applySessionListPayload(sessData, projData, opts){
     return;
   }
   if(_canRenderNow) _lastSessionListRenderSig = _renderSig;
+  // Session tabs: prune dead pins + refresh warm snapshots from payload.
+  if(typeof _sessionTabsPruneToVisibleRows==='function'){ try{ _sessionTabsPruneToVisibleRows(); }catch(_){ } }
+  if(typeof _sessionTabsSyncSnapshotsFromRows==='function'){ try{ _sessionTabsSyncSnapshotsFromRows(_allSessions); }catch(_){ } }
   renderSessionListFromCache();  // no-ops if rename is in progress
 }
 
